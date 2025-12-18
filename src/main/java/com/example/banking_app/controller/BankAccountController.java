@@ -27,9 +27,14 @@ public class BankAccountController {
         return ResponseEntity.ok(bankAccountService.registerUser(user));
     }
 
-    @PostMapping("/createAccount")
-    public ResponseEntity<UserBankAccountResponseDto> createAccount(Long userId, @RequestBody @Valid AccountRequestDto account){
+    @PostMapping("/createAccount/{userId}")
+    public ResponseEntity<UserBankAccountResponseDto> createAccount(@PathVariable Long userId, @RequestBody @Valid AccountRequestDto account){
         return ResponseEntity.ok(bankAccountService.createAccount(userId, account));
+    }
+
+    @PutMapping("/linkUserAndAccount")
+    public ResponseEntity<UserBankAccountResponseDto> linkUserAndAccount(@PathVariable Long userId, @PathVariable Long bankAccountNo){
+        return ResponseEntity.ok(bankAccountService.linkUserAndAccount(userId, bankAccountNo));
     }
 
     @GetMapping("/{bankAccountNo}")
@@ -52,7 +57,12 @@ public class BankAccountController {
         return ResponseEntity.ok(bankAccountService.withdrawAmount(bankAccountNo, withdrawAmount));
     }
 
-    @DeleteMapping("/{bankAccountNo}")
+    @DeleteMapping("deleteUser/{userId}")
+    public ResponseEntity<String> deleteUser(@PathVariable Long userId){
+        return ResponseEntity.ok(bankAccountService.deleteUser(userId));
+    }
+
+    @DeleteMapping("deleteAccount/{bankAccountNo}")
     public ResponseEntity<String> deleteAccount(@PathVariable Long bankAccountNo){
         return ResponseEntity.ok(bankAccountService.deleteAccount(bankAccountNo));
     }

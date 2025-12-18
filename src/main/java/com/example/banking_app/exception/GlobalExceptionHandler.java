@@ -68,4 +68,29 @@ public class GlobalExceptionHandler {
                 "INVALID_DEPOSIT_AMOUNT");
         return new ResponseEntity<>(errorDetails, HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(MaxUsersInAccountReachedException.class)
+    public ResponseEntity<ErrorDetails> MaxUsersInAccountReachedException (
+            MaxUsersInAccountReachedException maxUsersInAccountReachedException, WebRequest webRequest){
+
+        ErrorDetails errorDetails = new ErrorDetails(
+                LocalDateTime.now(),
+                maxUsersInAccountReachedException.getMessage(),
+                webRequest.getDescription(false),
+                "MAX_LIMIT_REACHED");
+        return new ResponseEntity<>(errorDetails, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(UserAlreadyLinkedToAccountException.class)
+    public ResponseEntity<ErrorDetails> UserAlreadyLinkedToAccountException
+            (UserAlreadyLinkedToAccountException userAlreadyLinkedToAccountException,
+                                               WebRequest webRequest){
+
+        ErrorDetails errorDetails = new ErrorDetails(
+                LocalDateTime.now(),
+                userAlreadyLinkedToAccountException.getMessage(),
+                webRequest.getDescription(false),
+                "MAX_LIMIT_REACHED");
+        return new ResponseEntity<>(errorDetails, HttpStatus.BAD_REQUEST);
+    }
 }
