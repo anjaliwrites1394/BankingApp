@@ -1,7 +1,6 @@
 package com.example.banking_app.exception;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -91,6 +90,17 @@ public class GlobalExceptionHandler {
                 userAlreadyLinkedToAccountException.getMessage(),
                 webRequest.getDescription(false),
                 "MAX_LIMIT_REACHED");
+        return new ResponseEntity<>(errorDetails, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(BankAccountDoesNotExistException.class)
+    public ResponseEntity<ErrorDetails> BankAccountDoesNotExist(
+            BankAccountDoesNotExistException bankAccountDoesNotExistException, WebRequest webRequest){
+        ErrorDetails errorDetails = new ErrorDetails(
+                LocalDateTime.now(),
+                bankAccountDoesNotExistException.getMessage(),
+                webRequest.getDescription(false),
+                "BANK_ACCOUNT_NUMBER_INVALID");
         return new ResponseEntity<>(errorDetails, HttpStatus.BAD_REQUEST);
     }
 }

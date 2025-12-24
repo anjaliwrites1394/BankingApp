@@ -72,6 +72,12 @@ public class BankAccountController {
         return ResponseEntity.ok(bankAccountService.verify(user));
     }
 
+    @PostMapping
+    public ResponseEntity<String> transferFund(
+            @PathVariable Long senderAccountNo, @PathVariable Long receiverAccountNo, @PathVariable Double amount){
+        return ResponseEntity.ok(bankAccountService.transferFund(senderAccountNo, receiverAccountNo, amount));
+    }
+
 
 
 }

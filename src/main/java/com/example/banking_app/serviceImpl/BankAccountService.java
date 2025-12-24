@@ -17,4 +17,5 @@ UserResponseDto registerUser(@Valid UserRequestDto user);
 UserBankAccountResponseDto createAccount(Long userId, @Valid AccountRequestDto account);
 String deleteUser(Long userId);
 UserBankAccountResponseDto linkUserAndAccount(Long userId, Long bankAccountNo);
+String transferFund(Long senderAccountNo, Long receiverAccountNo, Double amount);
 }

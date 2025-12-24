@@ -1,13 +1,11 @@
 package com.example.banking_app.serviceImpl.impl;
 
 import com.example.banking_app.dto.*;
-import com.example.banking_app.entity.BankAccount;
-import com.example.banking_app.entity.Users;
-import com.example.banking_app.entity.UsersBankAccount;
-import com.example.banking_app.entity.UsersBankAccountKey;
+import com.example.banking_app.entity.*;
 import com.example.banking_app.exception.*;
 import com.example.banking_app.mapper.UserBankMapper;
 import com.example.banking_app.repository.BankAccountRepository;
+import com.example.banking_app.repository.TransactionHistoryRepository;
 import com.example.banking_app.repository.UserRepository;
 import com.example.banking_app.repository.UsersBankAccountRepository;
 import com.example.banking_app.serviceImpl.BankAccountService;
@@ -45,6 +43,8 @@ public class BankAccountImpl implements BankAccountService {
     @Autowired
     private UsersBankAccountRepository usersBankAccountRepository;
     @Autowired
+    private TransactionHistoryRepository transactionHistoryRepository;
+    @Autowired
     private UserBankMapper userBankMapper;
     @Autowired
     private BCryptPasswordEncoder encoder;
@@ -53,30 +53,6 @@ public class BankAccountImpl implements BankAccountService {
     @Autowired
     private JWTService jwtService;
 
-
-//    @Override
-//    @Transactional
-//    public UserBankAccountResponseDto addAccount(UserBankAccountRequestDto account) {
-//
-//        Users user =  userBankMapper.toUser(account);
-//        Users existingUser = userRepository.findByUsername(user.getUsername());
-//        if(existingUser != null)
-//            throw new UserAlreadyExistsException("User Already exists", "username", user.getUsername());
-//
-//        user.setPassword(encoder.encode(user.getPassword()));
-//        Users savedUser = userRepository.save(user);
-//        BankAccount bankAccount = userBankMapper.toBankAccount(account);
-//        BankAccount savedBankAccount = bankAccountRepository.save(bankAccount);
-//
-//        UsersBankAccountKey key = new UsersBankAccountKey(
-//                savedUser.getUserId(),savedBankAccount.getBankAccountNo());
-//        UsersBankAccount usersBankAccount = new UsersBankAccount(key, savedUser, savedBankAccount);
-//
-//        savedUser.getUsersBankAccounts().add(usersBankAccount);
-//        savedBankAccount.getUsersBankAccount().add(usersBankAccount);
-//
-//        return userBankMapper.toUserBankAccountResponseDto(savedUser, savedBankAccount);
-//    }
 
     @Override
     @Transactional
@@ -97,6 +73,13 @@ public class BankAccountImpl implements BankAccountService {
 
         Users user = userRepository.findById(userId)
                 .orElseThrow(()->new ResourceNotFoundException("UserId not found", "userId", userId.toString()));
+
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        boolean userExists = user.getUsername().equals(username);
+
+        if(!userExists)
+            throw new UserNotAuthorizedException("Not authorized");
+
         BankAccount bankAccount = userBankMapper.toBankAccount(account);
         BankAccount savedBankAccount = bankAccountRepository.save(bankAccount);
 
@@ -104,6 +87,7 @@ public class BankAccountImpl implements BankAccountService {
                 userId,savedBankAccount.getBankAccountNo());
         UsersBankAccount usersBankAccount = new UsersBankAccount(key, user, savedBankAccount);
 
+        usersBankAccountRepository.save(usersBankAccount);
         user.getUsersBankAccounts().add(usersBankAccount);
         savedBankAccount.getUsersBankAccount().add(usersBankAccount);
 
@@ -114,12 +98,18 @@ public class BankAccountImpl implements BankAccountService {
     @Transactional
     public UserBankAccountResponseDto linkUserAndAccount(Long userId, Long bankAccountNo) {
 
-        //Verify if user is authorized to link user and account
-
         Users user = userRepository.findById(userId)
                 .orElseThrow(()->new ResourceNotFoundException("UserId not found", "userId", userId.toString()));
         BankAccount bankAccount = bankAccountRepository.findById(bankAccountNo)
                 .orElseThrow(() -> new ResourceNotFoundException("Bank account is invalid", "bankAccountNo", bankAccountNo.toString()));
+
+//        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+//        boolean userExists = bankAccount.getUsersBankAccount().isEmpty()?
+//                user.getUsername()==username :
+//                bankAccount.getUsersBankAccount()
+//                .stream()
+//                .map(UsersBankAccount::getUser)
+//                .anyMatch(users -> users.getUsername().equals(username));
 
         if(bankAccount.getUsersBankAccount().size()==3)
             throw new MaxUsersInAccountReachedException("Account cannot have more than 3 users");
@@ -128,7 +118,8 @@ public class BankAccountImpl implements BankAccountService {
         if(usersBankAccountRepository.existsById(usersBankAccountKey))
             throw new UserAlreadyLinkedToAccountException("User is already linked to this account");
 
-        UsersBankAccount usersBankAccount = usersBankAccountRepository.save(new UsersBankAccount(usersBankAccountKey, user, bankAccount));
+        UsersBankAccount usersBankAccount = usersBankAccountRepository.save(
+                new UsersBankAccount(usersBankAccountKey, user, bankAccount));
         user.getUsersBankAccounts().add(usersBankAccount);
         bankAccount.getUsersBankAccount().add(usersBankAccount);
 
@@ -137,15 +128,24 @@ public class BankAccountImpl implements BankAccountService {
     }
 
     @Override
+    @Transactional
+    public String transferFund(Long senderAccountNo, Long receiverAccountNo, Double amount) {
+
+        withdrawAmount(senderAccountNo, amount);
+        depositAmount(receiverAccountNo, amount);
+
+        return "SUCCESS";
+    }
+
+    @Override
     public UserBankAccountResponseDto getAccountDetails(Long bankAccountNo) {
 
-        Optional<BankAccount> optionalBankAccount = bankAccountRepository.findById(bankAccountNo);
-        if(optionalBankAccount.isEmpty())
-            throw new ResourceNotFoundException(
-                    "Bank Account Number does not exist", "bankAccountNo", bankAccountNo.toString());
+        BankAccount bankAccount = bankAccountRepository.findById(bankAccountNo)
+                .orElseThrow(() -> new ResourceNotFoundException
+                        ("Bank Account Number does not exist", "bankAccountNo", bankAccountNo.toString()));
 
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        boolean userExists = optionalBankAccount.get().getUsersBankAccount()
+        boolean userExists = bankAccount.getUsersBankAccount()
                 .stream()
                 .map(UsersBankAccount::getUser)
                 .anyMatch(users -> users.getUsername().equals(username));
@@ -154,20 +154,24 @@ public class BankAccountImpl implements BankAccountService {
             throw new UserNotAuthorizedException("Not authorized");
 
         return userBankMapper.toUserBankAccountResponseDto(
-                optionalBankAccount.get().getUsersBankAccount().get(0).getUser(), optionalBankAccount.get());
+                bankAccount.getUsersBankAccount().get(0).getUser(), bankAccount);
     }
 
     @Override
     @Transactional
     public UserBankAccountResponseDto depositAmount(Long bankAccountNo, double depositAmount) {
 
-        Optional<BankAccount> optionalBankAccount = bankAccountRepository.findById(bankAccountNo);
-        if(optionalBankAccount.isEmpty())
-            throw new ResourceNotFoundException("Bank Account does not exist", "bankAccountNo", bankAccountNo.toString());
+        BankAccount bankAccount = bankAccountRepository.findById(bankAccountNo)
+                .orElseThrow(() ->
+                        new BankAccountDoesNotExistException("Bank Account does not exist", bankAccountNo));
 
-        BankAccount bankAccount = optionalBankAccount.get();
         bankAccount.setCurrentBal(bankAccount.getCurrentBal()+depositAmount);
         BankAccount savedBankAccount = bankAccountRepository.save(bankAccount);
+
+        //Saving the transaction history
+        Transaction transaction = new Transaction(
+                null, bankAccountNo, "DEPOSIT", depositAmount, null);
+        transactionHistoryRepository.save(transaction);
 
         return userBankMapper.toUserBankAccountResponseDto(
                 savedBankAccount.getUsersBankAccount().get(0).getUser(),
@@ -178,16 +182,21 @@ public class BankAccountImpl implements BankAccountService {
     @Transactional
     public UserBankAccountResponseDto withdrawAmount(Long bankAccountNo, double withdrawAmount) {
 
-        Optional<BankAccount> optionalBankAccount = bankAccountRepository.findById(bankAccountNo);
-        if (optionalBankAccount.isEmpty())
-            throw new ResourceNotFoundException("Bank Account does not exist", "bankAccountNo", bankAccountNo.toString());
+        BankAccount bankAccount = bankAccountRepository.findById(bankAccountNo)
+                .orElseThrow(()->
+            new BankAccountDoesNotExistException("Bank Account does not exist", bankAccountNo));
 
-        BankAccount bankAccount = optionalBankAccount.get();
         if (withdrawAmount > bankAccount.getCurrentBal())
             throw new LowBalanceException("Low Balance");
 
         bankAccount.setCurrentBal(bankAccount.getCurrentBal() - withdrawAmount);
         BankAccount savedBankAccount = bankAccountRepository.save(bankAccount);
+
+        //Saving the transaction history
+        Transaction transaction = new Transaction(
+                null, bankAccountNo, "WITHDRAW", withdrawAmount, null);
+        transactionHistoryRepository.save(transaction);
+
 
         return userBankMapper.toUserBankAccountResponseDto(
                 savedBankAccount.getUsersBankAccount().get(0).getUser(),
